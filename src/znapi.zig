@@ -26,7 +26,7 @@ pub fn statusToError(status: napi.napi_status) napi_error!void {
 }
 
 pub fn defineModule(comptime exports: anytype) void {
-    if (@typeInfo(@TypeOf(exports)) != .Struct) {
+    if (@typeInfo(@TypeOf(exports)) != .@"struct") {
         @compileError("Expected a struct, got: " ++ @typeName(@TypeOf(exports)));
     }
 
@@ -41,5 +41,5 @@ pub fn defineModule(comptime exports: anytype) void {
         }
     };
 
-    @export(wrapper.init, .{ .name = "napi_register_module_v1", .linkage = .strong });
+    @export(&wrapper.init, .{ .name = "napi_register_module_v1", .linkage = .strong });
 }

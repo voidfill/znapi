@@ -52,31 +52,31 @@ pub fn toNapiValue(ctx: *Ctx, val: anytype) TranslationError!n.napi_value {
     if (T == n.napi_value) return val;
 
     return switch (@typeInfo(T)) {
-        .Undefined => ctx.undefined,
-        .Null => ctx.null,
-        .Bool => try ctx.createBoolean(val),
-        .Fn => try ctx.createFunction(val, null, null),
-        .Int => try ctx.createInt(val),
-        .Float => try ctx.createFloat(val),
-        .Enum => try ctx.createUint32(@intFromEnum(val)),
-        .Optional => if (val) |v| try ctx.toNapiValue(v) else ctx.null,
-        .Array, .Vector => try ctx.createArrayFrom(val),
-        .Struct => |i| if (i.is_tuple) try ctx.createTuple(val) else try ctx.createObjectFrom(val),
-        .Union => ctx.createUnion(val),
-        .Pointer => |i| switch (i.size) {
-            .Slice => try ctx.createArrayFrom(val),
-            .One => {
+        .undefined => ctx.undefined,
+        .null => ctx.null,
+        .bool => try ctx.createBoolean(val),
+        .@"fn" => try ctx.createFunction(val, null, null),
+        .int => try ctx.createInt(val),
+        .float => try ctx.createFloat(val),
+        .@"enum" => try ctx.createUint32(@intFromEnum(val)),
+        .optional => if (val) |v| try ctx.toNapiValue(v) else ctx.null,
+        .array, .vector => try ctx.createArrayFrom(val),
+        .@"struct" => |i| if (i.is_tuple) try ctx.createTuple(val) else try ctx.createObjectFrom(val),
+        .@"union" => ctx.createUnion(val),
+        .pointer => |i| switch (i.size) {
+            .slice => try ctx.createArrayFrom(val),
+            .one => {
                 const ci = @typeInfo(i.child);
-                if (ci == .Array and ci.Array.child == u8 and ci.Array.sentinel != null and @as(*const u8, @ptrCast(ci.Array.sentinel)).* == 0) {
+                if (ci == .array and ci.array.child == u8 and ci.array.sentinel != null and @as(*const u8, @ptrCast(ci.array.sentinel)).* == 0) {
                     return try ctx.createString(val);
                 }
                 @compileError("Cannot convert a One item pointer to a napi_value");
             },
-            .C => @compileError("Cannot convert C pointer to a napi_value, please cast to a slice if possible"),
-            .Many => @compileError("Cannot convert Many item pointer to a napi_value, please cast to a slice"),
+            .c => @compileError("Cannot convert C pointer to a napi_value, please cast to a slice if possible"),
+            .many => @compileError("Cannot convert Many item pointer to a napi_value, please cast to a slice"),
         },
-        .ComptimeInt => @compileError("Cannot convert comptime integer to a napi_value, please cast to an appropriately sized int"),
-        .ComptimeFloat => @compileError("Cannot convert comptime float to a napi_value, please cast to an appropriately sized float"),
+        .comptime_int => @compileError("Cannot convert comptime integer to a napi_value, please cast to an appropriately sized int"),
+        .comptime_float => @compileError("Cannot convert comptime float to a napi_value, please cast to an appropriately sized float"),
 
         else => @compileError("Unsupported type: " ++ @typeName(T)),
     };
@@ -90,8 +90,8 @@ pub fn createFunction(ctx: *Ctx, comptime f: ctxCallback, comptime name: ?[]cons
             err(raw.napi_get_instance_data(@ptrCast(env), @ptrCast(&c))) catch @panic("napi_get_instance_data failed");
             const res = f(c, cbi);
 
-            return switch (@typeInfo(@typeInfo(@TypeOf(f)).Fn.return_type.?)) {
-                .ErrorUnion => {
+            return switch (@typeInfo(@typeInfo(@TypeOf(f)).@"fn".return_type.?)) {
+                .error_union => {
                     return res catch |ec| c.throw(@errorName(ec)) catch null;
                 },
                 else => res,
@@ -111,7 +111,7 @@ pub fn createFunction(ctx: *Ctx, comptime f: ctxCallback, comptime name: ?[]cons
 
 pub fn createInt(ctx: *Ctx, val: anytype) !n.napi_value {
     const ti = switch (@typeInfo(@TypeOf(val))) {
-        .Int => |i| i,
+        .int => |i| i,
         else => @compileError("Expected an integer, got: " ++ @typeName(@TypeOf(val))),
     };
 
@@ -134,9 +134,22 @@ pub fn createInt(ctx: *Ctx, val: anytype) !n.napi_value {
     }
 }
 
+test "createInt" {
+    var ctx: Ctx = undefined;
+
+    _ = try ctx.createInt(@as(u1, 1));
+    _ = try ctx.createInt(@as(i2, 1));
+    _ = try ctx.createInt(@as(i32, 123));
+    _ = try ctx.createInt(@as(u32, 123));
+    _ = try ctx.createInt(@as(i64, 123));
+    _ = try ctx.createInt(@as(u64, 123));
+    _ = try ctx.createInt(@as(i128, 123));
+    _ = try ctx.createInt(@as(u128, 123));
+}
+
 pub fn createBigintLarge(ctx: *Ctx, comptime T: type, val: T) !n.napi_value {
     const ti = switch (@typeInfo(T)) {
-        .Int => |i| i,
+        .int => |i| i,
         else => @compileError("Expected an integer, got: " ++ @typeName(T)),
     };
     if (ti.bits <= 64) @compileError("Expected a larger integer, got: " ++ @typeName(T));
@@ -144,8 +157,14 @@ pub fn createBigintLarge(ctx: *Ctx, comptime T: type, val: T) !n.napi_value {
     const wc: usize = ti.bits / 64 + 1;
     var words: [wc]u64 align(@alignOf(T)) = [_]u64{0} ** wc;
 
+    var iter: @Type(.{ .int = .{
+        .bits = ti.bits,
+        .signedness = .unsigned,
+    } }) = @bitCast(if (val < 0) -val else val);
+
     inline for (0..wc) |i| {
-        words[i] = @truncate(val >> (i * 64));
+        words[i] = @truncate(iter);
+        iter >>= 64;
     }
 
     if (comptime builtin.target.cpu.arch.endian() != .little) @compileError("TODO: implement big endian bigints");
@@ -154,6 +173,14 @@ pub fn createBigintLarge(ctx: *Ctx, comptime T: type, val: T) !n.napi_value {
     try err(raw.napi_create_bigint_words(ctx.env, @intFromBool(val < 0), wc, @ptrCast(&words), &res));
 
     return res;
+}
+
+test "createBigintLarge" {
+    var ctx: Ctx = undefined;
+    const val: u128 = 123;
+
+    _ = try ctx.createBigintLarge(u128, val);
+    _ = try ctx.createBigintLarge(i111, val);
 }
 
 pub fn createUint32(ctx: *Ctx, val: u32) !n.napi_value {
@@ -188,9 +215,17 @@ pub fn createBigintBytes(ctx: *Ctx, sign: bool, bytes: []const u8) !n.napi_value
 
 pub fn createFloat(ctx: *Ctx, val: anytype) !n.napi_value {
     const ti = @typeInfo(@TypeOf(val));
-    if (ti != .Float) @compileError("Expected a float, got: " ++ @typeName(@TypeOf(val)));
-    if (ti.Float.bits <= 64) return try ctx.createDouble(@floatCast(val));
+    if (ti != .float) @compileError("Expected a float, got: " ++ @typeName(@TypeOf(val)));
+    if (ti.float.bits <= 64) return try ctx.createDouble(@floatCast(val));
     @compileError("Cannot convert float with more than 64 bits to double, please cast yourself.");
+}
+
+test "createFloat" {
+    var ctx: Ctx = undefined;
+
+    _ = try ctx.createFloat(@as(f16, 123));
+    _ = try ctx.createFloat(@as(f32, 123));
+    _ = try ctx.createFloat(@as(f64, 123));
 }
 
 pub fn createDouble(ctx: *Ctx, val: f64) !n.napi_value {
@@ -213,10 +248,10 @@ pub fn createArray(ctx: *Ctx, len: ?usize) !n.napi_value {
 
 pub fn createArrayFrom(ctx: *Ctx, arr: anytype) !n.napi_value {
     const len = switch (@typeInfo(@TypeOf(arr))) {
-        .Array => |i| i.len,
-        .Vector => |i| i.len,
-        .Pointer => |i| if (i.size == .Slice) arr.len else @compileError("Expected Slice size to be of type .Pointer"),
-        else => @compileError("Expected Array or Vector, got: " ++ @typeName(@TypeOf(arr))),
+        .array => |i| i.len,
+        .vector => |i| i.len,
+        .pointer => |i| if (i.size == .Slice) arr.len else @compileError("Expected Pointer size to be of type .Slice"),
+        else => @compileError("Expected Array or vector, got: " ++ @typeName(@TypeOf(arr))),
     };
 
     const res = try ctx.createArray(len);
@@ -224,6 +259,17 @@ pub fn createArrayFrom(ctx: *Ctx, arr: anytype) !n.napi_value {
         try ctx.setElement(res, i, try ctx.toNapiValue(arr[i]));
     }
     return res;
+}
+
+test "createArrayFrom" {
+    var ctx: Ctx = undefined;
+    const arr = [_]u32{ 123, 456 };
+    const vec = @Vector(2, u32){ 123, 456 };
+    const slice: []const u32 = &[_]u32{ 123, 456 };
+
+    _ = try ctx.createArrayFrom(arr);
+    _ = try ctx.createArrayFrom(vec);
+    _ = try ctx.createArrayFrom(slice);
 }
 
 pub fn createObject(ctx: *Ctx) !n.napi_value {
@@ -243,13 +289,27 @@ pub fn createObjectFrom(ctx: *Ctx, obj: anytype) !n.napi_value {
     return res;
 }
 
+test "createObjectFrom" {
+    var ctx: Ctx = undefined;
+    const obj = struct { a: u32, b: u64 };
+
+    _ = try ctx.createObjectFrom(obj{ .a = 123, .b = 456 });
+}
+
 pub fn createTuple(ctx: *Ctx, tuple: anytype) !n.napi_value {
-    const fieldNames = comptime std.meta.fieldNames(tuple);
+    const fieldNames = comptime std.meta.fieldNames(@TypeOf(tuple));
     const res = try ctx.createArray(fieldNames.len);
     inline for (fieldNames, 0..) |name, i| {
         try ctx.setElement(res, i, try ctx.toNapiValue(@field(tuple, name)));
     }
     return res;
+}
+
+test "createTuple" {
+    var ctx: Ctx = undefined;
+    const tuple = struct { u32, u64 };
+
+    _ = try ctx.createTuple(tuple{ 123, 456 });
 }
 
 pub fn createPropertyKey(ctx: *Ctx, utf8name: []const u8) !n.napi_value {
@@ -259,7 +319,7 @@ pub fn createPropertyKey(ctx: *Ctx, utf8name: []const u8) !n.napi_value {
 }
 
 pub fn createUnion(ctx: *Ctx, u: anytype) !n.napi_value {
-    if (@typeInfo(@TypeOf(u)) != .Union) @compileError("Expected a union type, got: " ++ @typeName(@TypeOf(u)));
+    if (@typeInfo(@TypeOf(u)) != .@"union") @compileError("Expected a union type, got: " ++ @typeName(@TypeOf(u)));
 
     switch (u) {
         inline else => |un| {
@@ -268,6 +328,16 @@ pub fn createUnion(ctx: *Ctx, u: anytype) !n.napi_value {
             return res;
         },
     }
+}
+
+test "createUnion" {
+    var ctx: Ctx = undefined;
+    const u = union(enum) {
+        a: u32,
+        b: u64,
+    };
+
+    _ = try ctx.createUnion(u{ .a = 123 });
 }
 
 pub fn createString(ctx: *Ctx, str: []const u8) !n.napi_value {
@@ -289,29 +359,29 @@ pub fn parseNapiValue(ctx: *Ctx, schema: type, val: n.napi_value, allocator: ?st
     if (schema == n.napi_value) return val;
 
     return switch (@typeInfo(schema)) {
-        .Undefined => if (try ctx.napiTypeOf(val) == .undefined) undefined else parseError.UndefinedExpected,
-        .Null => if (try ctx.napiTypeOf(val) == .null) null else parseError.NullExpected,
-        .Bool => try ctx.getBool(val),
-        .Optional => |i| if (try ctx.napiTypeOf(val) == .undefined) null else try ctx.parseNapiValue(i.child, val, allocator),
-        .Int => try ctx.getInt(schema, val),
-        .Float => try ctx.getFloat(schema, val),
-        .Struct => |info| if (info.is_tuple) try ctx.getTuple(schema, val, allocator) else try ctx.getStruct(schema, val, allocator),
-        .Array, .Vector => try ctx.getArray(schema, val, allocator),
-        .Pointer => |info| {
+        .undefined => if (try ctx.napiTypeOf(val) == .undefined) undefined else parseError.UndefinedExpected,
+        .null => if (try ctx.napiTypeOf(val) == .null) null else parseError.NullExpected,
+        .bool => try ctx.getBool(val),
+        .optional => |i| if (try ctx.napiTypeOf(val) == .undefined) null else try ctx.parseNapiValue(i.child, val, allocator),
+        .int => try ctx.getInt(schema, val),
+        .float => try ctx.getFloat(schema, val),
+        .@"struct" => |info| if (info.is_tuple) try ctx.getTuple(schema, val, allocator) else try ctx.getStruct(schema, val, allocator),
+        .array, .vector => try ctx.getArray(schema, val, allocator),
+        .pointer => |info| {
             if (info.size != .Slice) @compileError("Pointer size must be .Slice");
             if (info.child == u8 and info.sentinel != null and @as(*const u8, @ptrCast(info.sentinel)).* == 0) {
                 return try ctx.getStringUtf8(val, allocator);
             }
             return try ctx.getSlice(schema, val, allocator);
         },
-        .ErrorUnion => |info| {
+        .error_union => |info| {
             // we cannot return the error, because not bubbling it up is hard.
             // therefore we require optional and return null in fail case.
             // this is different from a normal optional and nulls misinputs
             if (@typeInfo(info.payload) != .Optional) @compileError("Error union payload must be optional");
             return ctx.parseNapiValue(info.payload, val, allocator) catch null;
         },
-        .Union => ctx.getUnion(schema, val, allocator),
+        .@"union" => ctx.getUnion(schema, val, allocator),
 
         else => @compileError("Unsupported type: " ++ @typeName(schema)),
     };
@@ -319,7 +389,7 @@ pub fn parseNapiValue(ctx: *Ctx, schema: type, val: n.napi_value, allocator: ?st
 
 pub fn parseArgs(ctx: *Ctx, comptime schema: anytype, cbi: n.napi_callback_info, allocator: ?std.mem.Allocator) !schema {
     const ti = switch (@typeInfo(schema)) {
-        .Struct => |i| i,
+        .@"struct" => |i| i,
         else => @compileError("Expected a tuple, got: " ++ @typeName(schema)),
     };
     if (!ti.is_tuple) @compileError("Expected a tuple, got: " ++ @typeName(schema));
@@ -332,6 +402,15 @@ pub fn parseArgs(ctx: *Ctx, comptime schema: anytype, cbi: n.napi_callback_info,
     }
 
     return ret;
+}
+
+test "parseArgs" {
+    var ctx: Ctx = undefined;
+    const schema = struct { u32, u64 };
+    const cbi: n.napi_callback_info = undefined;
+
+    _ = try ctx.parseArgs(schema, cbi, null);
+    _ = try ctx.parseArgs(schema, cbi, std.testing.allocator);
 }
 
 pub fn getThisArg(ctx: *Ctx, cbi: n.napi_callback_info) !n.napi_value {
@@ -353,9 +432,16 @@ pub fn getCbArgs(ctx: *Ctx, cbi: n.napi_callback_info, comptime argc: usize) ![a
     return res;
 }
 
+test "getCbArgs" {
+    var ctx: Ctx = undefined;
+    const cbi: n.napi_callback_info = undefined;
+
+    _ = try ctx.getCbArgs(cbi, 4);
+}
+
 pub fn getInt(ctx: *Ctx, comptime T: type, val: n.napi_value) parseError!T {
     const ti = switch (@typeInfo(T)) {
-        .Int => |i| i,
+        .int => |i| i,
         else => @compileError("Expected an integer, got: " ++ @typeName(T)),
     };
 
@@ -370,9 +456,23 @@ pub fn getInt(ctx: *Ctx, comptime T: type, val: n.napi_value) parseError!T {
     }
 }
 
+test "getInt" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    _ = try ctx.getInt(u8, val);
+    _ = try ctx.getInt(i8, val);
+    _ = try ctx.getInt(u32, val);
+    _ = try ctx.getInt(i32, val);
+    _ = try ctx.getInt(u64, val);
+    _ = try ctx.getInt(i64, val);
+    _ = try ctx.getInt(u128, val);
+    _ = try ctx.getInt(i128, val);
+}
+
 pub fn getBigintLarge(ctx: *Ctx, comptime T: type, val: n.napi_value) !T {
     const ti = switch (@typeInfo(T)) {
-        .Int => |i| i,
+        .int => |i| i,
         else => @compileError("Expected an integer, got: " ++ @typeName(T)),
     };
     if (ti.bits <= 64) @compileError("Expected a larger integer, got: " ++ @typeName(T));
@@ -389,6 +489,14 @@ pub fn getBigintLarge(ctx: *Ctx, comptime T: type, val: n.napi_value) !T {
     return if (ti.signedness == .signed and sign != 0) -ret else ret;
 }
 
+test "getBigintLarge" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    _ = try ctx.getBigintLarge(u128, val);
+    _ = try ctx.getBigintLarge(i111, val);
+}
+
 pub fn getUint32(ctx: *Ctx, val: n.napi_value) !u32 {
     var res: u32 = undefined;
     try err(raw.napi_get_value_uint32(ctx.env, val, &res));
@@ -403,21 +511,33 @@ pub fn getInt32(ctx: *Ctx, val: n.napi_value) !i32 {
 
 pub fn getBigintUint64(ctx: *Ctx, val: n.napi_value) !u64 {
     var res: u64 = undefined;
-    try err(raw.napi_get_value_bigint_uint64(ctx.env, val, &res));
+    var _lossless: bool = undefined;
+    try err(raw.napi_get_value_bigint_uint64(ctx.env, val, &res, &_lossless));
     return res;
 }
 
 pub fn getBigintInt64(ctx: *Ctx, val: n.napi_value) !i64 {
     var res: i64 = undefined;
-    try err(raw.napi_get_value_bigint_int64(ctx.env, val, &res));
+    var _lossless: bool = undefined;
+    try err(raw.napi_get_value_bigint_int64(ctx.env, val, &res, &_lossless));
     return res;
 }
 
 pub fn getFloat(ctx: *Ctx, comptime T: type, val: n.napi_value) parseError!T {
     const ti = @typeInfo(T);
-    if (ti != .Float) @compileError("Expected a float, got: " ++ @typeName(T));
+    if (ti != .float) @compileError("Expected a float, got: " ++ @typeName(T));
 
     return @floatCast(try ctx.getDouble(val));
+}
+
+test "getFloat" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    _ = try ctx.getFloat(f16, val);
+    _ = try ctx.getFloat(f32, val);
+    _ = try ctx.getFloat(f64, val);
+    _ = try ctx.getFloat(f128, val);
 }
 
 pub fn getDouble(ctx: *Ctx, val: n.napi_value) !f64 {
@@ -481,16 +601,24 @@ pub fn getStringUtf16(ctx: *Ctx, val: n.napi_value, allocator: std.mem.Allocator
 }
 
 pub fn getTuple(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: ?std.mem.Allocator) parseError!T {
-    if (ctx.napiTypeOf(val) != .array) return parseError.ArrayExpected;
-    const res: T = undefined;
-    inline for (std.meta.fieldNames(T), 0..) |name, i| {
-        @field(res, name) = try ctx.parseNapiValue(@field(T, name), try ctx.getElement(val, i), allocator);
+    if (!try ctx.isArray(val)) return parseError.ArrayExpected;
+    var res: T = undefined;
+    inline for (comptime std.meta.fieldNames(T), 0..) |name, i| {
+        @field(res, name) = try ctx.parseNapiValue(@FieldType(T, name), try ctx.getElement(val, i), allocator);
     }
     return res;
 }
 
+test "getTuple" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    _ = try ctx.getTuple(struct { a: u32, b: u64 }, val, std.testing.allocator);
+    _ = try ctx.getTuple(struct { u32, u64 }, val, std.testing.allocator);
+}
+
 pub fn getStruct(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: ?std.mem.Allocator) parseError!T {
-    if (@typeInfo(T) != .Struct or @typeInfo(T).Struct.is_tuple) @compileError("Expected a struct, got: " ++ @typeName(T));
+    if (@typeInfo(T) != .@"struct" or @typeInfo(T).@"struct".is_tuple) @compileError("Expected a struct, got: " ++ @typeName(T));
     var res: T = undefined;
     inline for (std.meta.fields(T)) |field| {
         @field(res, field.name) = try ctx.parseNapiValue(field.type, try ctx.getProperty(val, field.name), allocator);
@@ -498,11 +626,18 @@ pub fn getStruct(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: ?std
     return res;
 }
 
+test "getStruct" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    _ = try ctx.getStruct(struct { a: u32, b: u64 }, val, std.testing.allocator);
+}
+
 pub fn getArray(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: ?std.mem.Allocator) parseError!T {
     const ti = switch (@typeInfo(T)) {
-        .Array => |i| i,
-        .Vector => |i| i,
-        else => @compileError("Expected Array or Vector, got: " ++ @typeName(T)),
+        .array => |i| i,
+        .vector => |i| i,
+        else => @compileError("Expected Array or vector, got: " ++ @typeName(T)),
     };
 
     if (!try ctx.isArray(val)) return parseError.ArrayExpected;
@@ -514,16 +649,31 @@ pub fn getArray(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: ?std.
     return res;
 }
 
+test "getArray" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    _ = try ctx.getArray([123]u32, val, std.testing.allocator);
+    _ = try ctx.getArray(@Vector(123, u32), val, std.testing.allocator);
+}
+
 pub fn getSlice(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: std.mem.Allocator) parseError!T {
     const ti = @typeInfo(T);
-    if (ti != .Pointer or ti.Pointer.size != .Slice) @compileError("Expected a slice type, got: " ++ @typeName(T));
+    if (ti != .pointer or ti.pointer.size != .Slice) @compileError("Expected a slice type, got: " ++ @typeName(T));
     const len = try ctx.getArrayLength(val);
 
-    const res = if (ti.Pointer.sentinel != null) try allocator.allocSentinel(ti.Pointer.child, len, @as(*const ti.Pointer.child, @ptrCast(ti.Pointer.sentinel)).*) else try allocator.alloc(ti.Pointer.child, len);
+    const res = if (ti.pointer.sentinel != null) try allocator.allocSentinel(ti.pointer.child, len, @as(*const ti.pointer.child, @ptrCast(ti.pointer.sentinel)).*) else try allocator.alloc(ti.pointer.child, len);
     for (0..len) |i| {
-        res[i] = try ctx.parseNapiValue(ti.Pointer.child, try ctx.getElement(val, i), allocator);
+        res[i] = try ctx.parseNapiValue(ti.pointer.child, try ctx.getElement(val, i), allocator);
     }
     return res;
+}
+
+test "getSlice" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    _ = try ctx.getSlice([:0]const u8, val, std.testing.allocator);
 }
 
 pub fn getAllPropertyNames(ctx: *Ctx, val: n.napi_value, key_mode: n.napi_key_collection_mode, key_filter: n.napi_key_filter, key_conversion: n.napi_key_conversion) !n.napi_value {
@@ -534,7 +684,7 @@ pub fn getAllPropertyNames(ctx: *Ctx, val: n.napi_value, key_mode: n.napi_key_co
 
 pub fn getUnion(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: std.mem.Allocator) parseError!T {
     const ti = switch (@typeInfo(T)) {
-        .Union => |i| i,
+        .@"union" => |i| i,
         else => @compileError("Expected a union type, got: " ++ @typeName(T)),
     };
 
@@ -550,6 +700,18 @@ pub fn getUnion(ctx: *Ctx, comptime T: type, val: n.napi_value, allocator: std.m
     }
 
     return parseError.InvalidUnion;
+}
+
+test "getUnion" {
+    var ctx: Ctx = undefined;
+    const val: n.napi_value = undefined;
+
+    const u = union {
+        a: u32,
+        b: u64,
+    };
+
+    _ = try ctx.getUnion(u, val, std.testing.allocator);
 }
 
 pub fn getBufferInfo(ctx: *Ctx, buf: n.napi_value) ![]const u8 {

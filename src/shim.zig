@@ -938,6 +938,7 @@ pub fn node_api_symbol_for(env: n.napi_env, description: [*c]const u8, length: u
 }
 
 // generated zlib shims
+// TODO: kill zlib shims, bring your own lib!
 
 var _adler32 = nw(&fns.adler32);
 pub fn adler32(adler: c_ulong, buf: [*c]const u8, len: c_uint) c_ulong {
@@ -1203,11 +1204,13 @@ pub fn gzopen(path: [*c]const u8, mode: [*c]const u8) n.gzFile {
     return _gzopen.?(path, mode);
 }
 
-var _gzprintf = nw(&fns.gzprintf);
-pub fn gzprintf(file: n.gzFile, format: [*c]const u8, ...) c_int {
-    ensure(&_gzprintf, &.{ "gzprintf", "Cr_z_gzprintf" });
-    return _gzprintf.?(file, format);
-}
+// cannot be used because of varargs
+//
+// var _gzprintf = nw(&fns.gzprintf);
+// pub fn gzprintf(file: n.gzFile, format: [*c]const u8, ...) c_int {
+// ensure(&_gzprintf, &.{ "gzprintf", "Cr_z_gzprintf" });
+// return _gzprintf.?(file, format);
+// }
 
 var _gzputc = nw(&fns.gzputc);
 pub fn gzputc(file: n.gzFile, c: c_int) c_int {
