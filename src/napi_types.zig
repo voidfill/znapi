@@ -1,20 +1,31 @@
 const zeroes = @import("std").mem.zeroes;
 
-pub const napi_env = ?*opaque {};
-pub const node_api_basic_env = ?*opaque {};
-pub const napi_value = ?*opaque {};
-pub const napi_ref = ?*opaque {};
-pub const napi_handle_scope = ?*opaque {};
-pub const napi_escapable_handle_scope = ?*opaque {};
-pub const napi_callback_info = ?*opaque {};
-pub const node_api_nogc_finalize = napi_finalize;
-pub const node_api_basic_finalize = node_api_nogc_finalize;
-pub const napi_deferred = ?*opaque {};
-pub const napi_callback_scope = ?*opaque {};
-pub const napi_async_context = ?*opaque {};
-pub const napi_async_work = ?*opaque {};
-pub const napi_threadsafe_function = ?*opaque {};
-pub const napi_async_cleanup_hook_handle = ?*opaque {};
+const _napi_env = opaque {};
+pub const napi_env = ?*_napi_env;
+const _node_api_basic_env = opaque {};
+pub const node_api_basic_env = ?*_node_api_basic_env;
+const _napi_value = opaque {};
+pub const napi_value = ?*_napi_value;
+const _napi_ref = opaque {};
+pub const napi_ref = ?*_napi_ref;
+const _napi_handle_scope = opaque {};
+pub const napi_handle_scope = ?*_napi_handle_scope;
+const _napi_escapable_handle_scope = opaque {};
+pub const napi_escapable_handle_scope = ?*_napi_escapable_handle_scope;
+const _napi_callback_info = opaque {};
+pub const napi_callback_info = ?*_napi_callback_info;
+const _napi_deferred = opaque {};
+pub const napi_deferred = ?*_napi_deferred;
+const _napi_callback_scope = opaque {};
+pub const napi_callback_scope = ?*_napi_callback_scope;
+const _napi_async_context = opaque {};
+pub const napi_async_context = ?*_napi_async_context;
+const _napi_async_work = opaque {};
+pub const napi_async_work = ?*_napi_async_work;
+const _napi_threadsafe_function = opaque {};
+pub const napi_threadsafe_function = ?*_napi_threadsafe_function;
+const _napi_async_cleanup_hook_handle = opaque {};
+pub const napi_async_cleanup_hook_handle = ?*_napi_async_cleanup_hook_handle;
 pub const struct_uv_loop_s = opaque {};
 
 pub const napi_callback = ?*const fn (napi_env, napi_callback_info) callconv(.C) napi_value;
@@ -26,6 +37,8 @@ pub const napi_threadsafe_function_call_js = ?*const fn (napi_env, napi_value, ?
 pub const napi_async_cleanup_hook = ?*const fn (napi_async_cleanup_hook_handle, ?*anyopaque) callconv(.C) void;
 pub const napi_addon_register_func = ?*const fn (napi_env, napi_value) callconv(.C) napi_value;
 pub const node_api_addon_get_api_version_func = ?*const fn () callconv(.C) i32;
+pub const node_api_nogc_finalize = napi_finalize;
+pub const node_api_basic_finalize = node_api_nogc_finalize;
 
 pub const napi_status = enum(c_uint) {
     ok = 0,
@@ -161,55 +174,3 @@ pub const napi_module = extern struct {
     nm_priv: ?*anyopaque = zeroes(?*anyopaque),
     reserved: [4]?*anyopaque = zeroes([4]?*anyopaque),
 };
-
-//
-
-pub const in_func = ?*const fn (?*anyopaque, [*c][*c]u8) callconv(.C) c_uint;
-pub const out_func = ?*const fn (?*anyopaque, [*c]u8, c_uint) callconv(.C) c_int;
-pub const alloc_func = ?*const fn (?*anyopaque, c_uint, c_uint) callconv(.C) ?*anyopaque;
-pub const free_func = ?*const fn (?*anyopaque, ?*anyopaque) callconv(.C) void;
-pub const internal_state = opaque {};
-
-pub const z_stream = extern struct {
-    next_in: [*c]u8 = zeroes([*c]u8),
-    avail_in: c_uint = zeroes(c_uint),
-    total_in: c_ulong = zeroes(c_ulong),
-    next_out: [*c]u8 = zeroes([*c]u8),
-    avail_out: c_uint = zeroes(c_uint),
-    total_out: c_ulong = zeroes(c_ulong),
-    msg: [*c]u8 = zeroes([*c]u8),
-    state: ?*internal_state = zeroes(?*internal_state),
-    zalloc: alloc_func = zeroes(alloc_func),
-    zfree: free_func = zeroes(free_func),
-    @"opaque": ?*anyopaque = zeroes(?*anyopaque),
-    data_type: c_int = zeroes(c_int),
-    adler: c_ulong = zeroes(c_ulong),
-    reserved: c_ulong = zeroes(c_ulong),
-};
-
-pub const z_streamp = [*c]z_stream;
-
-pub const gz_header = extern struct {
-    text: c_int = zeroes(c_int),
-    time: c_ulong = zeroes(c_ulong),
-    xflags: c_int = zeroes(c_int),
-    os: c_int = zeroes(c_int),
-    extra: [*c]u8 = zeroes([*c]u8),
-    extra_len: c_uint = zeroes(c_uint),
-    extra_max: c_uint = zeroes(c_uint),
-    name: [*c]u8 = zeroes([*c]u8),
-    name_max: c_uint = zeroes(c_uint),
-    comment: [*c]u8 = zeroes([*c]u8),
-    comm_max: c_uint = zeroes(c_uint),
-    hcrc: c_int = zeroes(c_int),
-    done: c_int = zeroes(c_int),
-};
-
-pub const gz_headerp = [*c]gz_header;
-
-pub const struct_gzFile_s = extern struct {
-    have: c_ulong = zeroes(c_ulong),
-    next: [*c]u8 = zeroes([*c]u8),
-    pos: c_long = zeroes(c_long),
-};
-pub const gzFile = [*c]struct_gzFile_s;
