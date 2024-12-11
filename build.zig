@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/test.zig"),
+        .root_source_file = b.path("src/znapi.zig"),
         .target = target,
         .link_libc = true,
     });
