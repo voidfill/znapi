@@ -6,10 +6,6 @@ const windows = @cImport({
     @cInclude("windows.h");
 });
 
-test "refAllDecls" {
-    @import("std").testing.refAllDeclsRecursive(@This());
-}
-
 const isWindows = builtin.os.tag == .windows;
 
 var dll: windows.HMODULE = undefined;

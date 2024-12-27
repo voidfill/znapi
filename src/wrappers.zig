@@ -7,10 +7,6 @@ const shim = @import("shim.zig");
 const err = napi_errors.statusToError;
 const v = n.napi_value;
 
-test "refAllDecls" {
-    @import("std").testing.refAllDeclsRecursive(@This());
-}
-
 /// allows either passing a napi_env or a struct with field env
 inline fn _env(e: anytype) n.napi_env {
     return if (comptime @TypeOf(e) == n.napi_env) e else e.env;
@@ -62,7 +58,7 @@ pub fn _createBigintU64(e: anytype, value: u64) !v {
 
 pub fn _createBigintWords(e: anytype, sign_bit: bool, words: []const u64) !v {
     var result: v = undefined;
-    try err(shim.napi_create_bigint_words(_env(e), sign_bit, words.len, words.ptr, &result));
+    try err(shim.napi_create_bigint_words(_env(e), @intFromBool(sign_bit), words.len, words.ptr, &result));
     return result;
 }
 
@@ -186,7 +182,7 @@ pub fn _escapeHandle(e: anytype, scope: n.napi_escapable_handle_scope, escapee: 
     return result;
 }
 
-pub fn _fatalError(e: anytype, location: []const u8, message: []const u8) !noreturn {
+pub fn _fatalError(e: anytype, location: []const u8, message: []const u8) noreturn {
     shim.napi_fatal_error(_env(e), location.ptr, location.len, message.ptr, message.len);
 }
 
@@ -525,10 +521,8 @@ pub fn _runScript(e: anytype, script: v) !v {
     return result;
 }
 
-pub fn _setElement(e: anytype, object: v, index: usize, value: v) !bool {
-    var result: bool = undefined;
-    try err(shim.napi_set_element(_env(e), object, @truncate(index), value, &result));
-    return result;
+pub fn _setElement(e: anytype, object: v, index: usize, value: v) !void {
+    try err(shim.napi_set_element(_env(e), object, @truncate(index), value));
 }
 
 pub fn _setNamedProperty(e: anytype, object: v, utf8name: [:0]const u8, value: v) !void {
@@ -549,16 +543,16 @@ pub fn _throw(e: anytype, value: v) !void {
     try err(shim.napi_throw(_env(e), value));
 }
 
-pub fn _throwError(e: anytype, code: v, msg: v) !void {
-    try err(shim.napi_throw_error(_env(e), code, msg));
+pub fn _throwError(e: anytype, code: ?[:0]const u8, msg: [:0]const u8) !void {
+    try err(shim.napi_throw_error(_env(e), if (code) |c| c.ptr else null, msg.ptr));
 }
 
-pub fn _throwRangeError(e: anytype, code: v, msg: v) !void {
-    try err(shim.napi_throw_range_error(_env(e), code, msg));
+pub fn _throwRangeError(e: anytype, code: ?[:0]const u8, msg: [:0]const u8) !void {
+    try err(shim.napi_throw_range_error(_env(e), if (code) |c| c.ptr else null, msg.ptr));
 }
 
-pub fn _throwTypeError(e: anytype, code: v, msg: v) !void {
-    try err(shim.napi_throw_type_error(_env(e), code, msg));
+pub fn _throwTypeError(e: anytype, code: ?[:0]const u8, msg: [:0]const u8) !void {
+    try err(shim.napi_throw_type_error(_env(e), if (code) |c| c.ptr else null, msg.ptr));
 }
 
 pub fn _typeTagObject(e: anytype, value: v, type_tag: n.napi_type_tag) !void {

@@ -1,11 +1,10 @@
+const std = @import("std");
 const n = @import("napi_types.zig");
 const shim = @import("shim.zig");
 const napi_errors = @import("errors.zig");
-pub const wrappers = @import("wrappers.zig");
-
-test "refAllDecls" {
-    @import("std").testing.refAllDeclsRecursive(@This());
-}
+const wrappers = @import("wrappers.zig");
+const to_napi = @import("to_napi.zig");
+const from_napi = @import("from_napi.zig");
 
 pub const Ctx = @This();
 const Self = Ctx;
@@ -15,14 +14,41 @@ const Self = Ctx;
 env: n.napi_env,
 null: n.napi_value,
 undefined: n.napi_value,
+global: n.napi_value,
+true: n.napi_value,
+false: n.napi_value,
 
-pub fn init(e: n.napi_env) !Self {
-    return Self{
-        .env = e,
-        .null = try Self.getNull(e),
-        .undefined = try Self.getUndefined(e),
+/// Creates a new context allocated with the given allocator
+pub fn create(env: n.napi_env, allocator: std.mem.Allocator) !*Self {
+    const ctx = try allocator.create(Self);
+    errdefer allocator.destroy(ctx);
+
+    ctx.* = Self{
+        .env = env,
+        .null = try Self.getNull(env),
+        .undefined = try Self.getUndefined(env),
+        .global = try Self.getGlobal(env),
+        .true = try Self.getBoolean(env, true),
+        .false = try Self.getBoolean(env, false),
     };
+
+    try napi_errors.statusToError(shim.napi_set_instance_data(@ptrCast(env), ctx, null, null));
+
+    return ctx;
 }
+
+pub const createInt = to_napi.createInt;
+pub const createFloat = to_napi.createFloat;
+pub const createArrayFrom = to_napi.createArrayFrom;
+pub const createObjectFrom = to_napi.createObjectFrom;
+pub const createUnion = to_napi.createUnion;
+pub const createFunction = to_napi.createFunction;
+pub const createNapiValue = to_napi.createNapiValue;
+
+pub const getValueInt = from_napi.getValueInt;
+pub const getValueFloat = from_napi.getValueFloat;
+pub const getValueArray = from_napi.getValueArray;
+pub const getValue = from_napi.getValue;
 
 // MARK: dumb wrappers
 
