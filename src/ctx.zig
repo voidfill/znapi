@@ -11,15 +11,15 @@ const Self = Ctx;
 
 // MARK: struct definition
 
-env: n.napi_env,
-null: n.napi_value,
-undefined: n.napi_value,
-global: n.napi_value,
-true: n.napi_value,
-false: n.napi_value,
+env: n.env,
+null: n.value,
+undefined: n.value,
+global: n.value,
+true: n.value,
+false: n.value,
 
 /// Creates a new context allocated with the given allocator
-pub fn create(env: n.napi_env, allocator: std.mem.Allocator) !*Self {
+pub fn create(env: n.env, allocator: std.mem.Allocator) !*Self {
     const ctx = try allocator.create(Self);
     errdefer allocator.destroy(ctx);
 
@@ -49,107 +49,110 @@ pub const getValueInt = from_napi.getValueInt;
 pub const getValueFloat = from_napi.getValueFloat;
 pub const getValueArray = from_napi.getValueArray;
 pub const getValue = from_napi.getValue;
+pub const getValueStruct = from_napi.getValueStruct;
+pub const getValueUnion = from_napi.getValueUnion;
 
 // MARK: dumb wrappers
 
-pub const toBool = wrappers._toBool;
-pub const toNumber = wrappers._toNumber;
-pub const toObject = wrappers._toObject;
-pub const toString = wrappers._toString;
-pub const createArray = wrappers._createArray;
-pub const createBigintI64 = wrappers._createBigintI64;
-pub const createBigintU64 = wrappers._createBigintU64;
-pub const createBigintWords = wrappers._createBigintWords;
-pub const createDataview = wrappers._createDataview;
-pub const createDate = wrappers._createDate;
-pub const createDouble = wrappers._createDouble;
-pub const createError = wrappers._createError;
-pub const createI32 = wrappers._createI32;
-pub const createI64 = wrappers._createI64;
-pub const createObject = wrappers._createObject;
-pub const createRangeError = wrappers._createRangeError;
-pub const createReference = wrappers._createReference;
-pub const createStringLatin1 = wrappers._createStringLatin1;
-pub const createStringUtf16 = wrappers._createStringUtf16;
-pub const createStringUtf8 = wrappers._createStringUtf8;
-pub const createSymbol = wrappers._createSymbol;
-pub const createTypeError = wrappers._createTypeError;
-pub const createU32 = wrappers._createU32;
-pub const defineProperties = wrappers._defineProperties;
-pub const deleteElement = wrappers._deleteElement;
-pub const deleteProperty = wrappers._deleteProperty;
-pub const deleteReference = wrappers._deleteReference;
-pub const detachArraybuffer = wrappers._detachArraybuffer;
-pub const escapeHandle = wrappers._escapeHandle;
-pub const fatalError = wrappers._fatalError;
-pub const fatalException = wrappers._fatalException;
-pub const getAllPropertyNames = wrappers._getAllPropertyNames;
-pub const getAndClearLastException = wrappers._getAndClearLastException;
-pub const getArrayLength = wrappers._getArrayLength;
-pub const getBoolean = wrappers._getBoolean;
-pub const getDateValue = wrappers._getDateValue;
-pub const getElement = wrappers._getElement;
-pub const getGlobal = wrappers._getGlobal;
-pub const getInstanceData = wrappers._getInstanceData;
-pub const getLastErrorInfo = wrappers._getLastErrorInfo;
-pub const getNamedProperty = wrappers._getNamedProperty;
-pub const getNewTarget = wrappers._getNewTarget;
-pub const getNodeVersion = wrappers._getNodeVersion;
-pub const getNull = wrappers._getNull;
-pub const getProperty = wrappers._getProperty;
-pub const getPropertyNames = wrappers._getPropertyNames;
-pub const getPrototype = wrappers._getPrototype;
-pub const getReferenceValue = wrappers._getReferenceValue;
-pub const getUndefined = wrappers._getUndefined;
-pub const getUvEventLoop = wrappers._getUvEventLoop;
-pub const getValueBigintI64 = wrappers._getValueBigintI64;
-pub const getValueBigintU64 = wrappers._getValueBigintU64;
-pub const getValueBigintWords = wrappers._getValueBigintWords;
-pub const getValueBool = wrappers._getValueBool;
-pub const getValueDouble = wrappers._getValueDouble;
-pub const getValueExternal = wrappers._getValueExternal;
-pub const getValueI32 = wrappers._getValueI32;
-pub const getValueI64 = wrappers._getValueI64;
-pub const getValueStringLatin1 = wrappers._getValueStringLatin1;
-pub const getValueStringUtf16 = wrappers._getValueStringUtf16;
-pub const getValueStringUtf8 = wrappers._getValueStringUtf8;
-pub const getValueU32 = wrappers._getValueU32;
-pub const getVersion = wrappers._getVersion;
-pub const hasElement = wrappers._hasElement;
-pub const hasNamedProperty = wrappers._hasNamedProperty;
-pub const hasOwnProperty = wrappers._hasOwnProperty;
-pub const hasProperty = wrappers._hasProperty;
-pub const instanceOf = wrappers._instanceOf;
-pub const isArray = wrappers._isArray;
-pub const isArraybuffer = wrappers._isArraybuffer;
-pub const isBuffer = wrappers._isBuffer;
-pub const isDataview = wrappers._isDataview;
-pub const isDate = wrappers._isDate;
-pub const isDetachedArraybuffer = wrappers._isDetachedArraybuffer;
-pub const isError = wrappers._isError;
-pub const isExceptionPending = wrappers._isExceptionPending;
-pub const isPromise = wrappers._isPromise;
-pub const isTypedarray = wrappers._isTypedarray;
-pub const newInstance = wrappers._newInstance;
-pub const objectFreeze = wrappers._objectFreeze;
-pub const objectSeal = wrappers._objectSeal;
-pub const referenceRef = wrappers._referenceRef;
-pub const referenceUnref = wrappers._referenceUnref;
-pub const removeWrap = wrappers._removeWrap;
-pub const runScript = wrappers._runScript;
-pub const setElement = wrappers._setElement;
-pub const setNamedProperty = wrappers._setNamedProperty;
-pub const setProperty = wrappers._setProperty;
-pub const strictEquals = wrappers._strictEquals;
-pub const throw = wrappers._throw;
-pub const throwError = wrappers._throwError;
-pub const throwRangeError = wrappers._throwRangeError;
-pub const throwTypeError = wrappers._throwTypeError;
-pub const typeTagObject = wrappers._typeTagObject;
-pub const typeOf = wrappers._typeOf;
-pub const unwrap = wrappers._unwrap;
-pub const wrap = wrappers._wrap;
-pub const createPropertyKeyLatin1 = wrappers._createPropertyKeyLatin1;
-pub const createPropertyKeyUtf16 = wrappers._createPropertyKeyUtf16;
-pub const createPropertyKeyUtf8 = wrappers._createPropertyKeyUtf8;
-pub const symbolFor = wrappers._symbolFor;
+pub const toBool = wrappers.toBool;
+pub const toNumber = wrappers.toNumber;
+pub const toObject = wrappers.toObject;
+pub const toString = wrappers.toString;
+pub const createArray = wrappers.createArray;
+pub const createBigintI64 = wrappers.createBigintI64;
+pub const createBigintU64 = wrappers.createBigintU64;
+pub const createBigintWords = wrappers.createBigintWords;
+pub const createDataview = wrappers.createDataview;
+pub const createDate = wrappers.createDate;
+pub const createDouble = wrappers.createDouble;
+pub const createError = wrappers.createError;
+pub const createI32 = wrappers.createI32;
+pub const createI64 = wrappers.createI64;
+pub const createObject = wrappers.createObject;
+pub const createRangeError = wrappers.createRangeError;
+pub const createReference = wrappers.createReference;
+pub const createStringLatin1 = wrappers.createStringLatin1;
+pub const createStringUtf16 = wrappers.createStringUtf16;
+pub const createStringUtf8 = wrappers.createStringUtf8;
+pub const createSymbol = wrappers.createSymbol;
+pub const createTypeError = wrappers.createTypeError;
+pub const createU32 = wrappers.createU32;
+pub const defineProperties = wrappers.defineProperties;
+pub const deleteElement = wrappers.deleteElement;
+pub const deleteProperty = wrappers.deleteProperty;
+pub const deleteReference = wrappers.deleteReference;
+pub const detachArraybuffer = wrappers.detachArraybuffer;
+pub const escapeHandle = wrappers.escapeHandle;
+pub const fatalError = wrappers.fatalError;
+pub const fatalException = wrappers.fatalException;
+pub const getAllPropertyNames = wrappers.getAllPropertyNames;
+pub const getAndClearLastException = wrappers.getAndClearLastException;
+pub const getArrayLength = wrappers.getArrayLength;
+pub const getBoolean = wrappers.getBoolean;
+pub const getCallbackArgs = wrappers.getCallbackArgs;
+pub const getDateValue = wrappers.getDateValue;
+pub const getElement = wrappers.getElement;
+pub const getGlobal = wrappers.getGlobal;
+pub const getInstanceData = wrappers.getInstanceData;
+pub const getLastErrorInfo = wrappers.getLastErrorInfo;
+pub const getNamedProperty = wrappers.getNamedProperty;
+pub const getNewTarget = wrappers.getNewTarget;
+pub const getNodeVersion = wrappers.getNodeVersion;
+pub const getNull = wrappers.getNull;
+pub const getProperty = wrappers.getProperty;
+pub const getPropertyNames = wrappers.getPropertyNames;
+pub const getPrototype = wrappers.getPrototype;
+pub const getReferenceValue = wrappers.getReferenceValue;
+pub const getUndefined = wrappers.getUndefined;
+pub const getUvEventLoop = wrappers.getUvEventLoop;
+pub const getValueBigintI64 = wrappers.getValueBigintI64;
+pub const getValueBigintU64 = wrappers.getValueBigintU64;
+pub const getValueBigintWords = wrappers.getValueBigintWords;
+pub const getValueBool = wrappers.getValueBool;
+pub const getValueDouble = wrappers.getValueDouble;
+pub const getValueExternal = wrappers.getValueExternal;
+pub const getValueI32 = wrappers.getValueI32;
+pub const getValueI64 = wrappers.getValueI64;
+pub const getValueStringLatin1 = wrappers.getValueStringLatin1;
+pub const getValueStringUtf16 = wrappers.getValueStringUtf16;
+pub const getValueStringUtf8 = wrappers.getValueStringUtf8;
+pub const getValueU32 = wrappers.getValueU32;
+pub const getVersion = wrappers.getVersion;
+pub const hasElement = wrappers.hasElement;
+pub const hasNamedProperty = wrappers.hasNamedProperty;
+pub const hasOwnProperty = wrappers.hasOwnProperty;
+pub const hasProperty = wrappers.hasProperty;
+pub const instanceOf = wrappers.instanceOf;
+pub const isArray = wrappers.isArray;
+pub const isArraybuffer = wrappers.isArraybuffer;
+pub const isBuffer = wrappers.isBuffer;
+pub const isDataview = wrappers.isDataview;
+pub const isDate = wrappers.isDate;
+pub const isDetachedArraybuffer = wrappers.isDetachedArraybuffer;
+pub const isError = wrappers.isError;
+pub const isExceptionPending = wrappers.isExceptionPending;
+pub const isPromise = wrappers.isPromise;
+pub const isTypedarray = wrappers.isTypedArray;
+pub const newInstance = wrappers.newInstance;
+pub const objectFreeze = wrappers.objectFreeze;
+pub const objectSeal = wrappers.objectSeal;
+pub const referenceRef = wrappers.referenceRef;
+pub const referenceUnref = wrappers.referenceUnref;
+pub const removeWrap = wrappers.removeWrap;
+pub const runScript = wrappers.runScript;
+pub const setElement = wrappers.setElement;
+pub const setNamedProperty = wrappers.setNamedProperty;
+pub const setProperty = wrappers.setProperty;
+pub const strictEquals = wrappers.strictEquals;
+pub const throw = wrappers.throw;
+pub const throwError = wrappers.throwError;
+pub const throwRangeError = wrappers.throwRangeError;
+pub const throwTypeError = wrappers.throwTypeError;
+pub const typeTagObject = wrappers.typeTagObject;
+pub const typeOf = wrappers.typeOf;
+pub const unwrap = wrappers.unwrap;
+pub const wrap = wrappers.wrap;
+pub const createPropertyKeyLatin1 = wrappers.createPropertyKeyLatin1;
+pub const createPropertyKeyUtf16 = wrappers.createPropertyKeyUtf16;
+pub const createPropertyKeyUtf8 = wrappers.createPropertyKeyUtf8;
+pub const symbolFor = wrappers.symbolFor;

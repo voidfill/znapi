@@ -7,7 +7,7 @@ pub fn defineModule(comptime exports: anytype) void {
     }
 
     const wrapper = struct {
-        fn init(env: napi.napi_env, e: napi.napi_value) callconv(.C) napi.napi_value {
+        fn init(env: napi.env, e: napi.value) callconv(.C) napi.value {
             const ctx = Ctx.create(env, @import("std").heap.page_allocator) catch return e;
             return ctx.createObjectFrom(exports) catch return e;
         }

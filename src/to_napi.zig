@@ -18,7 +18,7 @@ fn absolute(val: anytype) typeWithoutSignedness(@TypeOf(val)) {
     return @truncate(@abs(val));
 }
 
-pub fn createInt(ctx: *const Ctx, val: anytype) !n.napi_value {
+pub fn createInt(ctx: *const Ctx, val: anytype) !n.value {
     const T = @TypeOf(val);
     const ti = switch (@typeInfo(T)) {
         .int => |i| i,
@@ -34,7 +34,7 @@ pub fn createInt(ctx: *const Ctx, val: anytype) !n.napi_value {
 
         var cur = abs;
         inline for (0..wc - 1) |i| {
-            words[i] = @truncate(abs);
+            words[i] = @truncate(cur);
             cur >>= 64;
         }
         words[wc - 1] = 0; // TODO: check if removable? trunc cur *should* always be at least 64 bits
@@ -52,7 +52,7 @@ pub fn createInt(ctx: *const Ctx, val: anytype) !n.napi_value {
     }
 }
 
-pub fn createFloat(ctx: *const Ctx, val: anytype) !n.napi_value {
+pub fn createFloat(ctx: *const Ctx, val: anytype) !n.value {
     return switch (@typeInfo(@TypeOf(val))) {
         .float => |f| switch (f.bits) {
             16, 32, 64 => try ctx.createDouble(val),
@@ -62,7 +62,7 @@ pub fn createFloat(ctx: *const Ctx, val: anytype) !n.napi_value {
     };
 }
 
-pub fn createArrayFrom(ctx: *const Ctx, val: anytype) !n.napi_value {
+pub fn createArrayFrom(ctx: *const Ctx, val: anytype) !n.value {
     const ti = @typeInfo(@TypeOf(val));
     const len = switch (ti) {
         inline .array, .vector => |t| t.len,
@@ -75,7 +75,7 @@ pub fn createArrayFrom(ctx: *const Ctx, val: anytype) !n.napi_value {
 
     // loop unroll vectors, tuples and small arrays
     if (ti == .vector or ti == .@"struct" or (ti == .array and len <= 16)) {
-        var nvs: [len]n.napi_value = undefined;
+        var nvs: [len]n.value = undefined;
         inline for (0..len) |i| nvs[i] = try ctx.createNapiValue(val[i]);
         inline for (0..len) |i| try ctx.setElement(res, i, nvs[i]);
     } else {
@@ -85,7 +85,7 @@ pub fn createArrayFrom(ctx: *const Ctx, val: anytype) !n.napi_value {
     return res;
 }
 
-pub fn createObjectFrom(ctx: *const Ctx, val: anytype) !n.napi_value {
+pub fn createObjectFrom(ctx: *const Ctx, val: anytype) !n.value {
     const T = @TypeOf(val);
     const field_names = switch (@typeInfo(T)) {
         .@"struct" => comptime std.meta.fieldNames(T),
@@ -94,10 +94,10 @@ pub fn createObjectFrom(ctx: *const Ctx, val: anytype) !n.napi_value {
 
     const res = try ctx.createObject();
 
-    var nvks: [field_names.len]n.napi_value = undefined;
+    var nvks: [field_names.len]n.value = undefined;
     inline for (field_names, 0..) |name, i| nvks[i] = try ctx.createStringUtf8(name);
 
-    var nvvs: [field_names.len]n.napi_value = undefined;
+    var nvvs: [field_names.len]n.value = undefined;
     inline for (field_names, 0..) |name, i| nvvs[i] = try ctx.createNapiValue(@field(val, name));
 
     inline for (0..field_names.len) |i| try ctx.setProperty(res, nvks[i], nvvs[i]);
@@ -105,13 +105,14 @@ pub fn createObjectFrom(ctx: *const Ctx, val: anytype) !n.napi_value {
     return res;
 }
 
-pub fn createUnion(ctx: *const Ctx, val: anytype) !n.napi_value {
+pub fn createUnion(ctx: *const Ctx, val: anytype) !n.value {
     if (@typeInfo(@TypeOf(val)) != .@"union") @compileError("Expected a union, got " ++ @typeName(@TypeOf(val)));
 
     const res = try ctx.createObject();
     switch (val) {
-        inline else => try ctx.setNamedProperty(res, @tagName(val), try ctx.createNapiValue(val)),
+        inline else => |v| try ctx.setNamedProperty(res, @tagName(val), try ctx.createNapiValue(v)),
     }
+
     return res;
 }
 
@@ -121,22 +122,21 @@ fn checkCtxCallback(comptime T: type) void {
         else => @compileError("Expected a function type, got " ++ @typeName(T)),
     };
 
-    if (ti.is_generic) @compileError("Cannot create callbacks from generic functions");
     if (ti.is_var_args) @compileError("Cannot create callbacks from varargs functions");
     if (ti.params.len != 2) @compileError("Cannot create callbacks from functions with less or more than 2 parameters");
 
     if (ti.params[0].type != *const Ctx) @compileError("Cannot create callbacks from functions with the first parameter not being a pointer to Ctx");
-    if (ti.params[1].type != n.napi_callback_info) @compileError("Cannot create callbacks from functions with the second parameter not being a napi_callback_info");
+    if (ti.params[1].type != n.callback_info) @compileError("Cannot create callbacks from functions with the second parameter not being a napi_callback_info");
 }
 
-pub fn createFunction(ctx: *const Ctx, f: anytype, comptime name: ?[]const u8, data: ?*anyopaque) !n.napi_value {
+pub fn createFunction(ctx: *const Ctx, f: anytype, comptime name: ?[]const u8, data: ?*anyopaque) !n.value {
     const T = @TypeOf(f);
     checkCtxCallback(T);
     const return_type = @typeInfo(@typeInfo(T).@"fn".return_type.?);
 
     const wrapper = struct {
-        pub fn cb(env: n.napi_env, cbi: n.napi_callback_info) callconv(.C) n.napi_value {
-            var c: *const Ctx = undefined;
+        pub fn cb(env: n.env, cbi: n.callback_info) callconv(.C) n.value {
+            var c: *Ctx = undefined;
             napi_errors.statusToError(shim.napi_get_instance_data(@ptrCast(env), @ptrCast(&c))) catch @panic("napi_get_instance_data failed");
             const res = f(c, cbi);
 
@@ -153,7 +153,7 @@ pub fn createFunction(ctx: *const Ctx, f: anytype, comptime name: ?[]const u8, d
         }
     };
 
-    var result: n.napi_value = undefined;
+    var result: n.value = undefined;
     if (name) |name2| {
         try napi_errors.statusToError(shim.napi_create_function(@ptrCast(ctx.env), name2.ptr, name2.len, wrapper.cb, data, &result));
     } else {
@@ -163,12 +163,12 @@ pub fn createFunction(ctx: *const Ctx, f: anytype, comptime name: ?[]const u8, d
     return result;
 }
 
-pub fn createNapiValue(ctx: *const Ctx, val: anytype) napi_errors.napi_error!n.napi_value {
+pub fn createNapiValue(ctx: *const Ctx, val: anytype) napi_errors.napi_error!n.value {
     const T = @TypeOf(val);
-    if (T == n.napi_value) return val;
+    if (T == n.value) return val;
 
     return switch (@typeInfo(T)) {
-        .undefined => ctx.undefined,
+        .void, .undefined => ctx.undefined,
         .null => ctx.null,
         .int => try ctx.createInt(val),
         .float => try ctx.createFloat(val),
@@ -180,7 +180,12 @@ pub fn createNapiValue(ctx: *const Ctx, val: anytype) napi_errors.napi_error!n.n
         .optional => if (val) |v| try ctx.createNapiValue(v) else ctx.null,
         .@"struct" => |s| if (s.is_tuple) try ctx.createArrayFrom(val) else ctx.createObjectFrom(val),
         .pointer => |p| switch (p.size) {
-            .Slice => try ctx.createArrayFrom(val),
+            .Slice => {
+                if (p.child == u8 and p.sentinel != null and @as(*const u8, @ptrCast(p.sentinel)).* == 0) {
+                    return try ctx.createStringUtf8(val);
+                }
+                return try ctx.createArrayFrom(val);
+            },
             .One => {
                 const ci = @typeInfo(p.child);
                 if (ci == .array and ci.array.child == u8 and ci.array.sentinel != null and @as(*const u8, @ptrCast(ci.array.sentinel)).* == 0) {
@@ -192,6 +197,6 @@ pub fn createNapiValue(ctx: *const Ctx, val: anytype) napi_errors.napi_error!n.n
         },
 
         .comptime_float, .comptime_int => @compileError("Cannot convert " ++ @typeName(T) ++ " to napi_value, please cast to a real type"),
-        .type, .void, .noreturn, .@"opaque", .@"anyframe", .frame, .error_union, .error_set => @compileError("Cannot convert type " ++ @typeName(T) ++ " to napi_value"),
+        .type, .noreturn, .@"opaque", .@"anyframe", .frame, .error_union, .error_set => @compileError("Cannot convert type " ++ @typeName(T) ++ " to napi_value"),
     };
 }
