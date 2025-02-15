@@ -41,7 +41,7 @@ pub fn getValueArray(ctx: *const Ctx, comptime T: type, value: n.value, comptime
     const len = switch (ti) {
         inline .array, .vector => |t| t.len,
         .@"struct" => |s| if (s.is_tuple) comptime std.meta.fields(T).len else @compileError("Can only create arrays from structs that are tuples"),
-        .pointer => |p| if (p.size == .Slice) try ctx.getArrayLength(value) else @compileError("Can only create arrays from pointers of type slice"),
+        .pointer => |p| if (p.size == .slice) try ctx.getArrayLength(value) else @compileError("Can only create arrays from pointers of type slice"),
         else => @compileError("Can only create arrays from slices, arrays, vectors and tuple structs"),
     };
 
@@ -51,7 +51,7 @@ pub fn getValueArray(ctx: *const Ctx, comptime T: type, value: n.value, comptime
             .is_volatile = p.is_volatile,
             .alignment = p.alignment,
             .child = p.child,
-            .sentinel = p.sentinel,
+            .sentinel_ptr = p.sentinel_ptr,
             .is_allowzero = p.is_allowzero,
             .address_space = p.address_space,
 
@@ -60,9 +60,9 @@ pub fn getValueArray(ctx: *const Ctx, comptime T: type, value: n.value, comptime
         else => T,
     } = switch (ti) {
         .array, .vector, .@"struct" => undefined,
-        .pointer => |p| if (allocator) |a| switch (p.sentinel == null) {
+        .pointer => |p| if (allocator) |a| switch (p.sentinel() == null) {
             true => try a.alloc(p.child, len),
-            false => try a.allocSentinel(p.child, len, @as(*const p.child, @ptrCast(p.sentinel)).*),
+            false => try a.allocSentinel(p.child, len, @as(*const p.child, @ptrCast(p.sentinel())).*),
         } else @compileError("Converting a napi_value to a slice requires an allocator"),
         else => @compileError("How did we get here?"),
     };
@@ -155,9 +155,9 @@ pub fn getValue(ctx: *const Ctx, comptime T: type, value: n.value, comptime allo
         inline .array, .vector => try ctx.getValueArray(T, value, allocator),
         .@"struct" => |s| if (s.is_tuple) try ctx.getValueArray(T, value, allocator) else ctx.getValueStruct(T, value, allocator),
         .pointer => |p| switch (p.size) {
-            .Slice => {
+            .slice => {
                 if (allocator) |a| {
-                    if (p.child == u8 and p.sentinel != null and @as(*const u8, @ptrCast(p.sentinel)).* == 0) {
+                    if (p.child == u8 and if (p.sentinel()) |s| s == 0 else false) {
                         return try ctx.getValueStringUtf8(value, a);
                     }
                     return try ctx.getValueArray(T, value, a);

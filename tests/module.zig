@@ -21,7 +21,7 @@ fn testParseTo(comptime T: type, comptime val: T) fn (ctx: *const znapi.Ctx, cbi
 
             switch (@typeInfo(T)) {
                 .pointer => |p| switch (p.size) {
-                    .Slice => {
+                    .slice => {
                         if (std.mem.eql(u8, parsed, val)) {
                             return parsed;
                         } else {

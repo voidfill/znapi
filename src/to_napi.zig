@@ -67,7 +67,7 @@ pub fn createArrayFrom(ctx: *const Ctx, val: anytype) !n.value {
     const len = switch (ti) {
         inline .array, .vector => |t| t.len,
         .@"struct" => |s| if (s.is_tuple) val.len else @compileError("Can only create arrays from structs that are tuples"),
-        .pointer => |p| if (p.size == .Slice) val.len else @compileError("Can only create arrays from pointers of type slice"),
+        .pointer => |p| if (p.size == .slice) val.len else @compileError("Can only create arrays from pointers of type slice"),
         else => @compileError("Can only create arrays from slices, arrays, vectors and tuple structs"),
     };
 
@@ -180,20 +180,20 @@ pub fn createNapiValue(ctx: *const Ctx, val: anytype) napi_errors.napi_error!n.v
         .optional => if (val) |v| try ctx.createNapiValue(v) else ctx.null,
         .@"struct" => |s| if (s.is_tuple) try ctx.createArrayFrom(val) else ctx.createObjectFrom(val),
         .pointer => |p| switch (p.size) {
-            .Slice => {
-                if (p.child == u8 and p.sentinel != null and @as(*const u8, @ptrCast(p.sentinel)).* == 0) {
+            .slice => {
+                if (p.child == u8 and if (p.sentinel()) |s| s == 0 else false) {
                     return try ctx.createStringUtf8(val);
                 }
                 return try ctx.createArrayFrom(val);
             },
-            .One => {
+            .one => {
                 const ci = @typeInfo(p.child);
-                if (ci == .array and ci.array.child == u8 and ci.array.sentinel != null and @as(*const u8, @ptrCast(ci.array.sentinel)).* == 0) {
+                if (ci == .array and ci.array.child == u8 and if (ci.array.sentinel()) |s| s == 0 else false) {
                     return try ctx.createStringUtf8(val);
                 }
                 @compileError("Cannot convert pointer of size one to napi_value");
             },
-            .C, .Many => @compileError("Cannot convert pointer of size " ++ @tagName(p.size) ++ " to napi_value"),
+            .c, .many => @compileError("Cannot convert pointer of size " ++ @tagName(p.size) ++ " to napi_value"),
         },
 
         .comptime_float, .comptime_int => @compileError("Cannot convert " ++ @typeName(T) ++ " to napi_value, please cast to a real type"),
