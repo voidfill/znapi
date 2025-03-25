@@ -214,11 +214,27 @@ pub fn getBoolean(e: anytype, value: bool) !v {
     return result;
 }
 
+pub fn getBufferInfo(e: anytype, value: v) ![]const u8 {
+    var data: ?*anyopaque = undefined;
+    var length: usize = undefined;
+    try err(shim.napi_get_buffer_info(_env(e), value, &data, &length));
+
+    if (length == 0 or data == null) return &[0]u8{};
+
+    return @as([*]const u8, @ptrCast(data))[0..length];
+}
+
 pub fn getCallbackArgs(e: anytype, cbi: n.callback_info, comptime argc: usize) ![argc]v {
     var args: [argc]v = undefined;
     var argcc = argc;
     try err(shim.napi_get_cb_info(_env(e), cbi, &argcc, &args, null, null));
     return args;
+}
+
+pub fn getCallbackData(e: anytype, cbi: n.callback_info) !?*anyopaque {
+    var data: ?*anyopaque = undefined;
+    try err(shim.napi_get_cb_info(_env(e), cbi, null, null, null, &data));
+    return data;
 }
 
 pub fn getDateValue(e: anytype, value: v) !f64 {
@@ -547,19 +563,31 @@ pub fn strictEquals(e: anytype, lhs: v, rhs: v) !bool {
 }
 
 pub fn throw(e: anytype, value: v) !void {
-    try err(shim.napi_throw(_env(e), value));
+    switch (shim.napi_throw(_env(e), value)) {
+        .ok, .pending_exception => {},
+        else => |status| return err(status),
+    }
 }
 
 pub fn throwError(e: anytype, code: ?[:0]const u8, msg: [:0]const u8) !void {
-    try err(shim.napi_throw_error(_env(e), if (code) |c| c.ptr else null, msg.ptr));
+    switch (shim.napi_throw_error(_env(e), if (code) |c| c.ptr else null, msg.ptr)) {
+        .ok, .pending_exception => {},
+        else => |status| return err(status),
+    }
 }
 
 pub fn throwRangeError(e: anytype, code: ?[:0]const u8, msg: [:0]const u8) !void {
-    try err(shim.napi_throw_range_error(_env(e), if (code) |c| c.ptr else null, msg.ptr));
+    switch (shim.napi_throw_range_error(_env(e), if (code) |c| c.ptr else null, msg.ptr)) {
+        .ok, .pending_exception => {},
+        else => |status| return err(status),
+    }
 }
 
 pub fn throwTypeError(e: anytype, code: ?[:0]const u8, msg: [:0]const u8) !void {
-    try err(shim.napi_throw_type_error(_env(e), if (code) |c| c.ptr else null, msg.ptr));
+    switch (shim.napi_throw_type_error(_env(e), if (code) |c| c.ptr else null, msg.ptr)) {
+        .ok, .pending_exception => {},
+        else => |status| return err(status),
+    }
 }
 
 pub fn typeTagObject(e: anytype, value: v, type_tag: n.type_tag) !void {

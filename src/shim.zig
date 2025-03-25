@@ -8,14 +8,6 @@ const windows = @cImport({
 
 const isWindows = builtin.os.tag == .windows;
 
-var dll: windows.HMODULE = undefined;
-
-pub fn initialize() void {
-    if (isWindows) {
-        dll = windows.GetModuleHandleA(null);
-    }
-}
-
 fn nw(f: anytype) ?@TypeOf(f) {
     if (isWindows) {
         return null;
@@ -33,7 +25,7 @@ inline fn ensure(f: anytype, comptime names: []const [:0]const u8) void {
         @branchHint(.unlikely);
         f.* = blk: {
             inline for (names) |name| {
-                const v = windows.GetProcAddress(dll, name);
+                const v = windows.GetProcAddress(0, name);
                 if (v != null) break :blk @ptrCast(v);
             }
             @panic("Unable to find function in dll");

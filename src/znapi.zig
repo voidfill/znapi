@@ -1,5 +1,7 @@
 pub const napi = @import("napi_types.zig");
 pub const Ctx = @import("ctx.zig");
+pub const errors = @import("errors.zig");
+pub const raw = @import("shim.zig");
 
 pub fn defineModule(comptime exports: anytype) void {
     if (@typeInfo(@TypeOf(exports)) != .@"struct") {

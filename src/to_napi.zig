@@ -132,21 +132,13 @@ fn checkCtxCallback(comptime T: type) void {
 pub fn createFunction(ctx: *const Ctx, f: anytype, comptime name: ?[]const u8, data: ?*anyopaque) !n.value {
     const T = @TypeOf(f);
     checkCtxCallback(T);
-    const return_type = @typeInfo(@typeInfo(T).@"fn".return_type.?);
 
     const wrapper = struct {
         pub fn cb(env: n.env, cbi: n.callback_info) callconv(.C) n.value {
             var c: *Ctx = undefined;
             napi_errors.statusToError(shim.napi_get_instance_data(@ptrCast(env), @ptrCast(&c))) catch @panic("napi_get_instance_data failed");
-            const res = f(c, cbi);
 
-            return c.createNapiValue(switch (return_type) {
-                .error_union => res catch |e| {
-                    c.throwError(null, @errorName(e)) catch @panic("throwError failed");
-                    return null;
-                },
-                else => res,
-            }) catch |e| {
+            return c.createNapiValue(f(c, cbi)) catch |e| {
                 c.throwError(null, @errorName(e)) catch @panic("throwError failed");
                 return null;
             };
@@ -195,8 +187,15 @@ pub fn createNapiValue(ctx: *const Ctx, val: anytype) napi_errors.napi_error!n.v
             },
             .c, .many => @compileError("Cannot convert pointer of size " ++ @tagName(p.size) ++ " to napi_value"),
         },
+        .error_union => {
+            const ne = val catch |e| {
+                ctx.throwError(null, @errorName(e)) catch @panic("throwError failed");
+                return null;
+            };
+            return ctx.createNapiValue(ne);
+        },
 
         .comptime_float, .comptime_int => @compileError("Cannot convert " ++ @typeName(T) ++ " to napi_value, please cast to a real type"),
-        .type, .noreturn, .@"opaque", .@"anyframe", .frame, .error_union, .error_set => @compileError("Cannot convert type " ++ @typeName(T) ++ " to napi_value"),
+        .type, .noreturn, .@"opaque", .@"anyframe", .frame, .error_set => @compileError("Cannot convert type " ++ @typeName(T) ++ " to napi_value"),
     };
 }
