@@ -208,6 +208,12 @@ pub fn getArrayLength(e: anytype, value: v) !u32 {
     return result;
 }
 
+pub fn getBigintWordLength(e: anytype, value: v) !usize {
+    var len: usize = undefined;
+    try err(shim.napi_get_value_bigint_words(_env(e), value, null, &len, null));
+    return len;
+}
+
 pub fn getBoolean(e: anytype, value: bool) !v {
     var result: v = undefined;
     try err(shim.napi_get_boolean(_env(e), value, &result));
@@ -315,6 +321,24 @@ pub fn getReferenceValue(e: anytype, ref: n.ref) !v {
     return result;
 }
 
+pub fn getStringLengthLatin1(e: anytype, value: v) !usize {
+    var len: usize = undefined;
+    try err(shim.napi_get_value_string_latin1(_env(e), value, null, 0, &len));
+    return len;
+}
+
+pub fn getStringLengthUtf16(e: anytype, value: v) !usize {
+    var len: usize = undefined;
+    try err(shim.napi_get_value_string_utf16(_env(e), value, null, 0, &len));
+    return len;
+}
+
+pub fn getStringLengthUtf8(e: anytype, value: v) !usize {
+    var len: usize = undefined;
+    try err(shim.napi_get_value_string_utf8(_env(e), value, null, 0, &len));
+    return len;
+}
+
 pub fn getUndefined(e: anytype) !v {
     var result: v = undefined;
     try err(shim.napi_get_undefined(_env(e), &result));
@@ -341,9 +365,16 @@ pub fn getValueBigintU64(e: anytype, value: v) !struct { lossless: bool, value: 
     return .{ .lossless = lossless, .value = i };
 }
 
+pub fn getValueBigintBytes(e: anytype, value: v, allocator: std.mem.Allocator) !struct { sign: bool, bytes: []const u8 } {
+    var len = try getBigintWordLength(e, value) * @sizeOf(u64);
+    var bytes = try allocator.alignedAlloc(u8, @alignOf(u64), len);
+    var sign: c_int = undefined;
+    try err(shim.napi_get_value_bigint_words(_env(e), value, &sign, &len, @ptrCast(&bytes)));
+    return .{ .sign = sign != 0, .bytes = bytes };
+}
+
 pub fn getValueBigintWords(e: anytype, value: v, allocator: std.mem.Allocator) !struct { sign: bool, words: []const u64 } {
-    var len: usize = undefined;
-    try err(shim.napi_get_value_bigint_words(_env(e), value, null, &len, null));
+    var len = try getBigintWordLength(e, value);
     var words = try allocator.alloc(u64, len);
     var sign: c_int = undefined;
     try err(shim.napi_get_value_bigint_words(_env(e), value, &sign, &len, @ptrCast(&words)));
@@ -381,24 +412,21 @@ pub fn getValueI64(e: anytype, value: v) !i64 {
 }
 
 pub fn getValueStringLatin1(e: anytype, value: v, allocator: std.mem.Allocator) ![:0]const u8 {
-    var len: usize = undefined;
-    try err(shim.napi_get_value_string_latin1(_env(e), value, null, 0, &len));
+    const len = try getStringLengthLatin1(e, value);
     const res = try allocator.allocSentinel(u8, len, 0);
     try err(shim.napi_get_value_string_latin1(_env(e), value, res.ptr, len + 1, null));
     return res;
 }
 
 pub fn getValueStringUtf16(e: anytype, value: v, allocator: std.mem.Allocator) ![:0]const u16 {
-    var len: usize = undefined;
-    try err(shim.napi_get_value_string_utf16(_env(e), value, null, 0, &len));
+    const len = try getStringLengthUtf16(e, value);
     const res = try allocator.allocSentinel(u16, len, 0);
     try err(shim.napi_get_value_string_utf16(_env(e), value, res.ptr, len + 1, null));
     return res;
 }
 
 pub fn getValueStringUtf8(e: anytype, value: v, allocator: std.mem.Allocator) ![:0]const u8 {
-    var len: usize = undefined;
-    try err(shim.napi_get_value_string_utf8(_env(e), value, null, 0, &len));
+    const len = try getStringLengthUtf8(e, value);
     const res = try allocator.allocSentinel(u8, len, 0);
     try err(shim.napi_get_value_string_utf8(_env(e), value, res.ptr, len + 1, null));
     return res;
